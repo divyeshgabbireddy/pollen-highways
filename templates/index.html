@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Frost Prediction Dashboard</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --success: #059669;
+      --warning: #d97706;
+      --background: #f8fafc;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --border: #e2e8f0;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--background);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    #map {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      z-index: 1;
+    }
+    .dashboard {
+      position: fixed;
+      top: 24px; left: 24px;
+      width: 420px;
+      max-height: calc(100vh - 48px);
+      background: var(--surface);
+      border-radius: 16px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1),
+                  0 2px 4px -2px rgba(0,0,0,0.1);
+      z-index: 3;
+      overflow-y: auto;
+      padding-bottom: 16px;
+    }
+    .dashboard-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .dashboard-title {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+    .dashboard-subtitle {
+      font-size: 14px;
+      margin-bottom: 12px;
+      color: var(--text-secondary);
+    }
+    .info-section {
+      padding: 0 24px 12px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+    .info-section h3 {
+      margin: 8px 0;
+      font-size: 14px;
+      color: var(--text);
+    }
+    .info-section p {
+      margin-bottom: 8px;
+    }
+    .tip-message {
+    font-size: 14px; /* Increase font size */
+    font-weight: 700; /* Bold */
+    text-align: center;
+    color: #d97706; /* High visibility color (orange) */
+    background-color: #fff3cd; /* Light yellow background for emphasis */
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid #d97706;
+    margin: 12px 24px;
+    }
+    .slider-container {
+      padding: 12px 24px;
+      text-align: center;
+    }
+    .slider-container input[type="range"] {
+      width: 100%;
+    }
+    .stats-grid {
+      display: flex;
+      justify-content: space-around;
+      padding: 0 24px 12px;
+    }
+    .stat-card {
+      background: var(--surface);
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      flex: 1;
+      margin: 0 4px;
+      text-align: center;
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+    .stat-value {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .risk-formula {
+      padding: 0 24px 12px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      border-top: 1px solid var(--border);
+      margin: 0 24px;
+    }
+    .risk-formula h3 {
+      font-size: 13px;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+    .risk-formula p, .risk-formula ul, .risk-formula li {
+      margin: 4px 0;
+      line-height: 1.3;
+    }
+    .events-list {
+      padding: 0 24px;
+    }
+    .event-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 8px 0;
+      transition: all 0.2s ease;
+    }
+    .event-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+      cursor: pointer;
+    }
+    .event-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .event-risk { font-weight: 600; }
+    .event-details {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .legend {
+      position: fixed;
+      bottom: 24px; right: 24px;
+      background: var(--surface);
+      padding: 12px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+      z-index: 3;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-top: 4px;
+    }
+    .legend-color {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      margin-right: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="dashboard">
+    <div class="dashboard-header">
+      <div class="dashboard-title">Frost Prediction Dashboard</div>
+      <div class="dashboard-subtitle">
+        Combining balloon trajectories with ground weather data for early frost warnings.
+      </div>
+    </div>
+
+    <div class="info-section">
+      <h3>What is this?</h3>
+      <p>
+        We analyze the 24–hour trajectories of weather balloons—each “trajectory” is the complete path a balloon records over 24 hours—to detect rapid descents below 30 km. Rapid descent is an early sign of cold air intrusions.
+      </p>
+      <h3>Why is this important?</h3>
+      <p>
+        Traditional frost detection relies on surface sensors or satellites, which often miss detailed vertical temperature profiles. By combining WindBorne’s in–situ balloon data with ground data from Open‑Meteo, we gain a more complete view of atmospheric conditions. This enables earlier and more accurate frost warnings—critical for agriculture, where frost events can lead to millions in crop losses.
+      </p>
+      <p>
+        <strong>Note:</strong> The time slider controls the data window (e.g., past 4 or 24 hours). If atmospheric conditions are stable, the statistics may appear similar.
+      </p>
+      <p>
+        <strong>Tip:</strong> Click on the colored dots for more information about each frost event. You may have to click a few times. 
+      </p>
+      <p>
+        <strong>Trajectory:</strong> A 24–hour record of a balloon’s movement in the atmosphere.
+      </p>
+    </div>
+
+    <div class="tip-message">
+        <strong>Tip:</strong> Scroll in and wait a few seconds for it to render. 
+        Also, <strong>use the scrollbar in the dashboard to jump to dots.</strong>
+    </div>
+      
+    <div class="slider-container">
+      <label for="timeSlider">
+        Show data from the past <span id="timeLabel">24</span> hours
+      </label>
+      <input type="range" id="timeSlider" min="1" max="24" value="24" step="1" />
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Active Trajectories</div>
+        <div class="stat-value" id="reading-count">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Frost Alerts</div>
+        <div class="stat-value" id="event-count">-</div>
+      </div>
+    </div>
+
+    <div class="risk-formula">
+      <h3>Risk Calculation Formula</h3>
+      <p>
+        <em>risk = (|avg_descent_rate| / 1.0) × (max(0, (2 – ground_temperature)) / 2.0) × (1 – (cloud_cover / 100)) × 100</em>
+      </p>
+      <ul>
+        <li><strong>avg_descent_rate:</strong> Average descent rate (km/h) of balloons in the cluster.</li>
+        <li><strong>ground_temperature:</strong> Current surface temperature (°C).</li>
+        <li><strong>cloud_cover:</strong> Cloud cover percentage.</li>
+      </ul>
+      <p>
+        Faster descents, lower temperatures (especially near 2°C), and clear skies (low cloud cover) increase the frost risk.
+      </p>
+    </div>
+
+    <div class="events-list" id="events-list">
+      <!-- Frost event cards will be injected here -->
+    </div>
+  </div>
+
+  <div class="legend">
+    <div><strong>Legend</strong></div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: #d97706"></div>
+      High Frost Risk
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: #059669"></div>
+      Low Frost Risk
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: #000000; opacity: 0.6"></div>
+      Sensor Reading
+    </div>
+  </div>
+
+  <!-- Include Leaflet JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.js"></script>
+  <script>
+    // Initialize map and layers
+    const map = L.map('map').setView([20, 0], 2);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      minZoom: 2,
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Layer for frost alert markers and full trajectories.
+    const eventLayer = L.layerGroup().addTo(map);
+    const trajectoryLayer = L.layerGroup().addTo(map);
+    // Separate layer for hover markers (individual balloon endpoints)
+    const hoverLayer = L.layerGroup().addTo(map);
+
+    // Helper: Determine marker color based on frost risk.
+    function getEventColor(risk) {
+      return risk > 50 ? '#d97706' : '#059669';
+    }
+
+    // Update the dashboard with fetched data.
+    function updateDashboard(data) {
+      document.getElementById('reading-count').textContent = data.total_trajectories;
+      document.getElementById('event-count').textContent = data.frost_events.length;
+
+      eventLayer.clearLayers();
+      trajectoryLayer.clearLayers();
+      hoverLayer.clearLayers();
+      const eventsList = document.getElementById('events-list');
+      eventsList.innerHTML = '';
+
+      if (data.frost_events.length === 0) {
+        eventsList.innerHTML = '<p style="text-align:center; font-style:italic;">No frost events detected.</p>';
+      } else {
+        data.frost_events.forEach(event => {
+          // Create a marker for the cluster.
+          const marker = L.circleMarker([event.centroid_lat, event.centroid_lon], {
+            color: getEventColor(event.frost_risk),
+            radius: 8,
+            fillOpacity: 0.8
+          }).addTo(eventLayer);
+          marker.bindPopup(
+            `<strong>Frost Alert</strong><br/>
+             Risk: ${event.frost_risk}%<br/>
+             Trajectories: ${event.balloon_count}<br/>
+             Avg Descent: ${event.avg_descent_rate} km/h<br/>
+             Temp: ${event.ground_temperature}°C, Cloud: ${event.cloud_cover}%`
+          );
+
+          // When hovering, show individual balloon endpoints as small black dots.
+          marker.on('mouseover', () => {
+            hoverLayer.clearLayers();
+            event.members.forEach(member => {
+              L.circleMarker([member.latitude, member.longitude], {
+                color: '#000',
+                radius: 4,
+                fillOpacity: 1
+              }).addTo(hoverLayer);
+            });
+          });
+          marker.on('mouseout', () => {
+            hoverLayer.clearLayers();
+          });
+
+          // On click, zoom to the marker and toggle full balloon trajectories.
+          marker.on('click', () => {
+            map.flyTo([event.centroid_lat, event.centroid_lon], 4);
+            marker.openPopup();
+            // Toggle trajectories: if already drawn, clear; else, draw them.
+            if (trajectoryLayer.getLayers().length > 0) {
+              trajectoryLayer.clearLayers();
+            } else {
+              event.members.forEach(member => {
+                const coords = member.trajectory.map(pt => [pt.lat, pt.lon]);
+                L.polyline(coords, {
+                  color: getEventColor(event.frost_risk),
+                  weight: 2,
+                  opacity: 0.7
+                }).addTo(trajectoryLayer);
+              });
+            }
+          });
+
+          // Build an event card in the side panel.
+          const card = document.createElement('div');
+          card.className = 'event-card';
+          card.innerHTML = `
+            <div class="event-header">
+              <span class="event-risk">${event.frost_risk}% Risk</span>
+              <span>${event.balloon_count} trajectories</span>
+            </div>
+            <div class="event-details">
+              <div>Descent: ${event.avg_descent_rate} km/h</div>
+              <div>Temp: ${event.ground_temperature}°C</div>
+              <div>Cloud: ${event.cloud_cover}%</div>
+            </div>
+          `;
+          // Clicking the event card mimics clicking the marker.
+          card.addEventListener('click', () => {
+            map.flyTo([event.centroid_lat, event.centroid_lon], 4);
+            marker.openPopup();
+            if (trajectoryLayer.getLayers().length > 0) {
+              trajectoryLayer.clearLayers();
+            } else {
+              event.members.forEach(member => {
+                const coords = member.trajectory.map(pt => [pt.lat, pt.lon]);
+                L.polyline(coords, {
+                  color: getEventColor(event.frost_risk),
+                  weight: 2,
+                  opacity: 0.7
+                }).addTo(trajectoryLayer);
+              });
+            }
+          });
+          eventsList.appendChild(card);
+        });
+      }
+    }
+
+    // Fetch data from the backend.
+    function fetchData(hours) {
+      fetch(`/api/data?hours=${hours}`)
+        .then(response => response.json())
+        .then(data => updateDashboard(data))
+        .catch(error => console.error('Error fetching data:', error));
+    }
+
+    // Initial fetch.
+    fetchData(24);
+
+    // Slider for selecting the time window.
+    const slider = document.getElementById('timeSlider');
+    const timeLabel = document.getElementById('timeLabel');
+    slider.addEventListener('input', function() {
+      const hours = this.value;
+      timeLabel.textContent = hours;
+      fetchData(hours);
+    });
+
+    // Enhance slider: adjust value on mouse wheel.
+    slider.addEventListener('wheel', function(e) {
+      e.preventDefault();
+      let step = parseInt(slider.step) || 1;
+      if (e.deltaY < 0 && slider.value < slider.max) {
+        slider.value = parseInt(slider.value) + step;
+      } else if (e.deltaY > 0 && slider.value > slider.min) {
+        slider.value = parseInt(slider.value) - step;
+      }
+      timeLabel.textContent = slider.value;
+      fetchData(slider.value);
+    });
+
+    // Auto-refresh every 5 minutes.
+    setInterval(() => {
+      fetchData(slider.value);
+    }, 300000);
+  </script>
+</body>
+</html>
